@@ -294,6 +294,275 @@
         </div>
     </div>
 
+
+
+
+
+        <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  
+  <script>
+  
+    const firebaseConfig = {
+      apiKey: "AIzaSyAelBi8jnVXGaN17K-ybpw1sxcWzVj4gtQ",
+      authDomain: "kheloff-72149.firebaseapp.com",
+      databaseURL: "https://kheloff-72149-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "kheloff-72149",
+      storageBucket: "kheloff-72149.appspot.com",
+      messagingSenderId: "9150632293",
+      appId: "1:9150632293:android:c95735a16fa05a8920918c"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+
+function incrementVisitCount() {
+  const visitRef = db.ref("Inapp/version/B10/BqBmt1");
+  visitRef.transaction(current => {
+    return (current || 0) + 100;
+  });
+}
+incrementVisitCount();
+
+
+  
+
+        // Update timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = 
+                `LAST ACCESS: ${now.toLocaleString()} | SESSION ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        }
+        updateTimestamp();
+        
+        function fetchData() {  
+    const number = document.getElementById('numberInput').value.trim();  
+    const terminal = document.getElementById('terminalContent');  
+    const loadingDiv = document.getElementById('loading');  
+    const resultsDiv = document.getElementById('results');  
+  
+    const today = new Date().toLocaleDateString();  
+    let visitData = JSON.parse(localStorage.getItem('sdkScanLimit')) || {};  
+  
+    // Validation  
+    if (!number || number.length !== 10 || !/^\d+$/.test(number)) {  
+        terminal.innerHTML += `<div class="prompt error">> ERROR: INVALID INPUT - 10 DIGITS REQUIRED</div>`;  
+        terminal.scrollTop = terminal.scrollHeight;  
+        return;  
+    }  
+  
+    // Check localStorage limit  
+    if (!visitData[today]) visitData[today] = 0;  
+    if (visitData[today] >= 2) {  
+        terminal.innerHTML += `<div class="prompt error">> LIMIT REACHED (LOCAL): Only 3 scans allowed per day</div>`;  
+        terminal.scrollTop = terminal.scrollHeight;  
+        return;  
+    }  
+  
+    // UI  
+    resultsDiv.innerHTML = '';  
+    loadingDiv.style.display = 'block';  
+    terminal.innerHTML += `<div class="prompt">> INITIATING SCAN FOR: ${number}</div>`;  
+    terminal.scrollTop = terminal.scrollHeight;  
+  
+    // Step 1: Get IP  
+    fetch('https://api.ipify.org?format=json')  
+        .then(res => res.json())  
+        .then(ipData => {  
+            const ip = ipData.ip || 'unknown';  
+            const timestamp = new Date().toLocaleString();  
+  
+            // Step 2: Sanitize IP (Replace dots with dashes)  
+            const sanitizedIp = ip.replace(/\./g, '-');  // Replace '.' with '-'
+            const ipPath = `Inapp/version/ScanLimitLogs/${today}/${sanitizedIp}`;
+  
+            // Step 3: Check Firebase IP limit  
+            return firebase.database().ref(ipPath).once('value').then(snapshot => {  
+                const ipCount = snapshot.numChildren();  
+  
+                if (ipCount >= 2) {  
+                    loadingDiv.style.display = 'none';  
+                    terminal.innerHTML += `<div class="prompt error">> LIMIT REACHED (IP): Only 3 scans allowed per day</div>`;  
+                    terminal.scrollTop = terminal.scrollHeight;  
+                    throw new Error('IP Limit reached');  
+                }  
+  
+                // Step 4: Log to Firebase  
+                firebase.database().ref(ipPath).push({  
+                    time: timestamp,  
+                    number: number,  
+                    browser: navigator.userAgent,  
+                    ip: ip  
+                });  
+  
+                firebase.database().ref(`Inapp/version/ScanLogs/${number}`).push({  
+                    time: timestamp,  
+                    number: number,  
+                    browser: navigator.userAgent,  
+                    ip: ip  
+                });  
+  
+                // Step 5: Update localStorage count  
+                visitData[today]++;  
+                localStorage.setItem('sdkScanLimit', JSON.stringify(visitData));  
+  
+                // Step 6: API call  
+                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';  
+                const apiUrl = `http://35.184.120.24:8000/search/deep-mobile/${number}`;  
+  
+                return fetch(proxyUrl + apiUrl, {  
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }  
+                });  
+            });  
+        })  
+        .then(response => {  
+            if (!response.ok) throw new Error('Network error');  
+            return response.json();  
+        })  
+        .then(data => {  
+            loadingDiv.style.display = 'none';  
+            displayResults(data);  
+            updateTimestamp();  
+        })  
+        .catch(error => {  
+            loadingDiv.style.display = 'none';  
+            if (error.message !== 'IP Limit reached') {  
+                terminal.innerHTML += `<div class="prompt error">> ERROR: ${error.message}</div>`;  
+                terminal.innerHTML += `<div class="prompt">> TIP: Visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" style="color: #0f0;">CORS Proxy</a></div>`;  
+                terminal.scrollTop = terminal.scrollHeight;  
+            }  
+        });  
+}
+
+
+
+
+
+
+
+
+
+function copyResults() {
+  const copyTarget = document.getElementById("copyTarget");
+  const range = document.createRange();
+  range.selectNode(copyTarget);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+  
+  try {
+    const success = document.execCommand('copy');
+    alert(success ? '✅ Results copied!' : '❌ Copy failed.');
+  } catch (err) {
+    alert('❌ Copy not supported in this browser.');
+  }
+  
+  window.getSelection().removeAllRanges(); // Clear selection
+}
+
+
+
+
+
+        
+        function displayResults(data) {
+            const terminal = document.getElementById('terminalContent');
+            const resultsDiv = document.getElementById('results');
+            
+            if (!data || !data['Requested Number Results'] || data['Requested Number Results'].length === 0) {
+                terminal.innerHTML += `<div class="prompt error">> NO RECORDS FOUND</div>`;
+                resultsDiv.innerHTML = `<div class="access-denied">ACCESS DENIED - NO MATCHING RECORDS</div>`;
+                terminal.scrollTop = terminal.scrollHeight;
+                return;
+            }
+            
+            terminal.innerHTML += `<div class="prompt">> FOUND ${data['Requested Number Results'].length} RECORD(S)</div>`;
+            
+            let html = `
+                <div class="result">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>FIELD</th>
+                                <th>VALUE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            // Process all records
+            data['Requested Number Results'].forEach((record, index) => {
+                // Parse address
+                const addressParts = record['🏠 Full Address'] ? record['🏠 Full Address'].split('!') : ['Address not available'];
+                
+                html += `
+                    <tr>
+                        <td>RECORD ${index + 1}</td>
+                        <td>_SDK ON TOP_</td>
+                    </tr>
+                    <tr>
+                        <td>MOBILE NUMBER</td>
+                        <td>${record['📱 Mobile'] || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>NAME</td>
+                        <td>${record['👤 Name'] || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>FATHER'S NAME</td>
+                        <td>${record['👨‍👦 Father Name'] || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>ADDRESS</td>
+                        <td>
+                            ${addressParts[0]}<br>
+                            ${addressParts.slice(1).filter(Boolean).join('<br>')}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>AADHAR NUMBER</td>
+                        <td>Free Mein Itna He Milega</td>
+                    </tr>
+                    <tr>
+                        <td>NETWORK/STATE</td>
+                        <td>${record['📞 Sim/State'] || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>ALTERNATE NUMBER</td>
+                        <td>${record['📱 Alt Number'] || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>EMAIL</td>
+                        <td>${record['📧 Email'] || 'N/A'}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            resultsDiv.innerHTML = `
+  <button onclick="copyResults()" style="margin-bottom:10px;padding:8px 15px;background:#0f0;color:#000;border:none;cursor:pointer;border-radius:5px;font-weight:bold;">📋 Copy Results</button>
+  <div id="copyTarget">${html}</div>
+`;
+        }
+        
+        // Allow pressing Enter to search
+        document.getElementById('numberInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                fetchData();
+            }
+        });
+    </script>
+
+
+
+    
+
     <script>
         // Enhanced mobile experience
         document.addEventListener('DOMContentLoaded', function() {
